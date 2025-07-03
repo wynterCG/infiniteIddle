@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Idle Adventurer: Combat & Equipment</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; touch-action: manipulation; }
+        .btn { @apply px-4 py-2 rounded-lg font-semibold text-white shadow-md transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2; }
+        .btn-primary { @apply bg-red-600 hover:bg-red-700 focus:ring-red-500; }
+        .btn-secondary { @apply bg-gray-600 hover:bg-gray-700 focus:ring-gray-500; }
+        .btn-prestige { @apply bg-indigo-700 hover:bg-indigo-800 focus:ring-indigo-600; }
+        .btn-combat { @apply bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500; }
+        .btn-stat { @apply bg-green-600 hover:bg-green-700 focus:ring-green-500 w-8 h-8 flex items-center justify-center font-bold text-lg; }
+        .btn-disabled { @apply bg-gray-400 cursor-not-allowed hover:scale-100; }
+        .card { @apply bg-gray-800 p-6 rounded-xl shadow-lg; }
+        .stat-display { @apply bg-gray-900 p-4 rounded-lg text-center; }
+        .progress-bar-bg { @apply w-full bg-gray-700 rounded-full h-4; }
+        .progress-bar { @apply bg-green-500 h-4 rounded-full transition-all duration-300 ease-in-out; }
+        .hp-bar { @apply bg-red-500 h-4 rounded-full transition-all duration-300 ease-in-out; }
+        .combat-log { @apply bg-gray-900 rounded-lg p-3 h-32 overflow-y-auto text-sm flex flex-col-reverse; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Left Column -->
+        <div class="space-y-6">
+            <!-- Header -->
+            <div class="text-center">
+                <h1 class="text-4xl font-bold text-red-400">Path of Vitality</h1>
+                <p class="text-indigo-300">Combat & Equipment Prototype</p>
+            </div>
+
+            <!-- Character Level & XP -->
+            <div class="card">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-2xl font-bold text-green-400">Level <span id="level-display">1</span></h3>
+                    <p class="text-gray-300 font-semibold">XP: <span id="xp-display">0 / 100</span></p>
+                </div>
+                <div class="progress-bar-bg"><div id="xp-progress-bar" class="progress-bar" style="width: 0%;"></div></div>
+            </div>
+
+            <!-- Core Stats Section -->
+            <div class="card border-2 border-green-600">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-2xl font-bold text-center text-green-400">Core Stats (Permanent)</h3>
+                    <p class="text-lg font-bold">Points: <span id="stat-points-display" class="text-yellow-400">0</span></p>
+                </div>
+                <div id="core-stats-container" class="space-y-3"></div>
+            </div>
+            
+            <!-- Equipment Section -->
+            <div class="card">
+                <h3 class="text-2xl font-bold mb-4 text-center text-yellow-400">Equipment (Permanent)</h3>
+                <div id="equipment-container" class="space-y-2"></div>
+            </div>
+
+            <!-- Vitality Talents Section -->
+            <div class="card">
+                <h3 class="text-2xl font-bold mb-4 text-center text-red-400">Vitality Talents (Resets)</h3>
+                <div id="talents-container" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <!-- Right Column -->
+        <div class="space-y-6">
+             <!-- Vitality Display -->
+            <div class="card grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="stat-display">
+                    <h2 class="text-lg font-semibold text-red-300">Vitality</h2>
+                    <p id="vitality-display" class="text-3xl font-bold text-white">0</p>
+                </div>
+                <div class="stat-display">
+                    <h2 class="text-lg font-semibold text-red-300">Vitality/sec</h2>
+                    <p id="vps-display" class="text-3xl font-bold text-white">0</p>
+                </div>
+            </div>
+            
+            <!-- Training Section -->
+            <div class="card">
+                 <h3 class="text-2xl font-bold mb-4 text-center text-red-400">Training</h3>
+                 <p class="text-center text-gray-300 mb-4">Train to gain Vitality and XP, which are required to level up and improve your character.</p>
+                 <button id="train-button" class="btn btn-primary w-full">Train (<span id="train-gains-display">+1 Vit, +1 XP</span>)</button>
+            </div>
+
+            <!-- Adventure / Combat Section -->
+            <div class="card border-2 border-yellow-600">
+                <h3 class="text-2xl font-bold mb-4 text-center text-yellow-400">Adventure</h3>
+                <div id="adventure-hub">
+                    <p class="text-center text-gray-300 mb-4">Spend Vitality to seek out danger and treasure.</p>
+                    <button id="find-fight-button" class="btn btn-combat w-full">Find a Fight (Cost: 10 Vitality)</button>
+                </div>
+                <div id="combat-zone" class="hidden space-y-4">
+                    <!-- Player Stats -->
+                    <div>
+                        <h4 class="font-bold text-lg text-green-400">You</h4>
+                        <div class="progress-bar-bg mt-1"><div id="player-hp-bar" class="hp-bar"></div></div>
+                        <p class="text-sm text-right"><span id="player-hp-display">100 / 100</span> HP</p>
+                    </div>
+                    <!-- Enemy Stats -->
+                    <div>
+                        <h4 id="enemy-name" class="font-bold text-lg text-red-400"></h4>
+                        <div class="progress-bar-bg mt-1"><div id="enemy-hp-bar" class="hp-bar"></div></div>
+                        <p class="text-sm text-right"><span id="enemy-hp-display">50 / 50</span> HP</p>
+                    </div>
+                    <!-- Combat Log -->
+                    <div id="combat-log" class="combat-log"></div>
+                    <button id="attack-button" class="btn btn-primary w-full">Attack</button>
+                </div>
+            </div>
+
+            <!-- Inventory Section -->
+            <div class="card">
+                <h3 class="text-2xl font-bold mb-4 text-center text-yellow-400">Inventory (Resets)</h3>
+                <div id="inventory-container" class="space-y-2">
+                    <p id="inventory-placeholder" class="text-center text-gray-500">No items found.</p>
+                </div>
+            </div>
+
+            <!-- Rebirth Section -->
+            <div class="card border-2 border-indigo-600">
+                <h3 class="text-2xl font-bold mb-4 text-center text-indigo-300">Rebirth</h3>
+                <p class="text-gray-300 text-center text-sm mb-4">Resets Level, XP, Vitality, Talents, and Inventory. Core Stats, Equipment, and Essence are permanent.</p>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="stat-display bg-indigo-900/50">
+                        <h4 class="font-semibold text-indigo-300">Total Essence</h4>
+                        <p id="essence-points-display" class="text-2xl font-bold">0</p>
+                    </div>
+                    <div class="stat-display bg-indigo-900/50">
+                        <h4 class="font-semibold text-indigo-300">Essence Bonus</h4>
+                        <p id="essence-bonus-display" class="text-2xl font-bold">+0%</p>
+                    </div>
+                </div>
+                <p id="rebirth-requirement-display" class="text-md text-yellow-400 text-center mt-2"></p>
+                <p class="text-lg text-center">Rebirth to gain: <strong id="essence-gain-display" class="text-indigo-400">0</strong> Essence</p>
+                <button id="rebirth-button" class="btn btn-prestige w-full mt-4">Undergo Rebirth</button>
+            </div>
+             <!-- Save/Reset Buttons -->
+            <div class="text-center space-x-4">
+                <button id="save-button" class="btn btn-secondary">Save Game</button>
+                <button id="reset-button" class="btn bg-red-800 hover:bg-red-900 focus:ring-red-700">Hard Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rebirth Modal... -->
+    <div id="rebirth-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="bg-gray-800 rounded-xl p-8 shadow-2xl text-center max-w-sm w-full">
+            <h2 class="text-2xl font-bold text-indigo-400 mb-4">Confirm Rebirth</h2>
+            <p class="text-gray-300 mb-6">Gain <strong id="modal-essence-gain" class="text-indigo-400">0</strong> Essence? This will reset Level, XP, Vitality, Talents, and Inventory.</p>
+            <div class="flex justify-center space-x-4">
+                <button id="confirm-rebirth-button" class="btn btn-prestige">Confirm</button>
+                <button id="cancel-rebirth-button" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+// --- GAME DATA ---
+const MONSTERS = {
+    goblin: { name: "Goblin", hp: 50, attack: 10, xp: 10, itemChance: 0.3 },
+    orc: { name: "Orc", hp: 120, attack: 25, xp: 25, itemChance: 0.5 },
+    troll: { name: "Troll", hp: 300, attack: 50, xp: 60, itemChance: 0.7 }
+};
+
+const ITEMS = {
+    weapon: [ { name: "Rusty Sword", stats: { strength: 1 } }, { name: "Iron Axe", stats: { strength: 3 } }, { name: "Steel Mace", stats: { strength: 5 } }, ],
+    armor: [ { name: "Leather Jerkin", stats: { agility: 1 } }, { name: "Chainmail Vest", stats: { agility: 3 } }, { name: "Plate Armor", stats: { agility: 5 } }, ],
+    ring: [ { name: "Glass Ring", stats: { intelligence: 1 } }, { name: "Jade Ring", stats: { intelligence: 3 } }, { name: "Ruby Ring", stats: { intelligence: 5 } }, ]
+};
+
+// --- GAME STATE & CONFIGURATION ---
+let gameState = {};
+let playerCombatState = {};
+let currentEnemy = null;
+
+const initialGameState = {
+    vitality: 0, essence: 0, level: 1, xp: 0, xpToNextLevel: 100, statPoints: 0,
+    coreStats: {
+        strength: { name: "Strength", level: 0, description: "+5% Vitality from Train & Attack Power" },
+        agility: { name: "Agility", level: 0, description: "+2% Damage Reduction per point" },
+        intelligence: { name: "Intelligence", level: 0, description: "+5% XP from Train & +1% Crit Chance" }
+    },
+    talents: [
+        { id: 0, name: "Endurance", description: "+0.1 VPS per level", baseCost: 10, baseEffect: 0.1, level: 0, costMultiplier: 1.15, type: 'vps' },
+        { id: 1, name: "Willpower", description: "+1 Vit per click per level", baseCost: 25, baseEffect: 1, level: 0, costMultiplier: 1.20, type: 'vpc' },
+        { id: 2, name: "Meditation", description: "+1% VPS multiplier per level", baseCost: 1000, baseEffect: 0.01, level: 0, costMultiplier: 1.25, type: 'multiplier' }
+    ],
+    equipment: { weapon: null, armor: null, ring: null },
+    inventory: []
+};
+
+// --- GETTERS for effective stats ---
+function getEquippedStat(statName) {
+    return Object.values(gameState.equipment).reduce((total, item) => {
+        return total + (item && item.stats[statName] ? item.stats[statName] : 0);
+    }, 0);
+}
+
+function getStrength() { return gameState.coreStats.strength.level + getEquippedStat('strength'); }
+function getAgility() { return gameState.coreStats.agility.level + getEquippedStat('agility'); }
+function getIntelligence() { return gameState.coreStats.intelligence.level + getEquippedStat('intelligence'); }
+
+function getAttackPower() { return 5 * (1 + getStrength() * 0.05); }
+function getDefense() { return getAgility() * 2; }
+function getCritChance() { return Math.min(75, getIntelligence() * 1); }
+function getMaxHP() { return 100 + (gameState.level * 10); }
+
+// --- CORE GAME LOGIC ---
+function levelUp() {
+    while (gameState.xp >= gameState.xpToNextLevel) {
+        gameState.level++;
+        gameState.statPoints++;
+        gameState.xp -= gameState.xpToNextLevel;
+        gameState.xpToNextLevel = Math.floor(100 * Math.pow(1.1, gameState.level));
+    }
+}
+
+function getEssenceBonus() { return 1 + (gameState.essence * 0.05); }
+function getVitalityPerSecond() {
+    const talentEndurance = gameState.talents.find(t => t.type === 'vps');
+    const talentMeditation = gameState.talents.find(t => t.type === 'multiplier');
+    const baseVps = talentEndurance.level * talentEndurance.baseEffect;
+    const talentMultiplier = 1 + (talentMeditation.level * talentMeditation.baseEffect);
+    return baseVps * talentMultiplier * getEssenceBonus();
+}
+function getVitalityPerTrain() {
+    const talent = gameState.talents.find(t => t.type === 'vpc');
+    const strengthBonus = 1 + getStrength() * 0.05;
+    return (1 + talent.level * talent.baseEffect) * strengthBonus * getEssenceBonus();
+}
+function getXpPerTrain() {
+    const intelligenceBonus = 1 + getIntelligence() * 0.05;
+    return 1 * intelligenceBonus;
+}
+
+function getTalentCost(talent) { return Math.floor(talent.baseCost * Math.pow(talent.costMultiplier, talent.level)); }
+function getEssenceGain() {
+    const REBIRTH_LEVEL_REQUIREMENT = 5;
+    if (gameState.level < REBIRTH_LEVEL_REQUIREMENT) return 0;
+    return Math.floor(gameState.level / REBIRTH_LEVEL_REQUIREMENT);
+}
+
+function upgradeTalent(talentId) {
+    const talent = gameState.talents.find(t => t.id === talentId);
+    const cost = getTalentCost(talent);
+    if (gameState.vitality >= cost) {
+        gameState.vitality -= cost;
+        talent.level++;
+        updateUI();
+    }
+}
+
+function spendStatPoint(statName) {
+    if (gameState.statPoints > 0 && gameState.coreStats[statName]) {
+        gameState.statPoints--;
+        gameState.coreStats[statName].level++;
+        updateUI();
+    }
+}
+
+function rebirth() {
+    const gain = getEssenceGain();
+    if (gain > 0) {
+        gameState.essence += gain;
+        const permanentData = {
+            coreStats: gameState.coreStats,
+            equipment: gameState.equipment,
+            essence: gameState.essence
+        };
+        gameState = {
+            ...JSON.parse(JSON.stringify(initialGameState)),
+            ...permanentData
+        };
+        saveGame();
+        updateUI();
+    }
+}
+
+// --- COMBAT LOGIC ---
+function startFight() {
+    const fightCost = 10;
+    if (gameState.vitality < fightCost) {
+        logToCombat("Not enough Vitality to fight!");
+        return;
+    }
+    gameState.vitality -= fightCost;
+
+    const monsterKeys = Object.keys(MONSTERS);
+    const randomKey = monsterKeys[Math.floor(Math.random() * monsterKeys.length)];
+    currentEnemy = { ...MONSTERS[randomKey] };
+    playerCombatState = { hp: getMaxHP() };
+
+    allUIElements['adventure-hub'].classList.add('hidden');
+    allUIElements['combat-zone'].classList.remove('hidden');
+    logToCombat(`You encounter a ${currentEnemy.name}!`);
+    updateCombatUI();
+}
+
+function playerAttack() {
+    let damage = getAttackPower();
+    let isCrit = Math.random() * 100 < getCritChance();
+    if (isCrit) {
+        damage *= 2;
+        logToCombat(`CRITICAL HIT! You strike for ${formatNumber(damage)} damage!`);
+    } else {
+        logToCombat(`You strike for ${formatNumber(damage)} damage.`);
+    }
+    currentEnemy.hp -= damage;
+
+    if (currentEnemy.hp <= 0) {
+        endFight(true);
+    } else {
+        updateCombatUI();
+        setTimeout(enemyAttack, 500);
+    }
+}
+
+function enemyAttack() {
+    const defense = getDefense();
+    const damageReduction = defense / (defense + 100);
+    const damage = currentEnemy.attack * (1 - damageReduction);
+    playerCombatState.hp -= damage;
+    logToCombat(`${currentEnemy.name} hits you for ${formatNumber(damage)} damage.`);
+
+    if (playerCombatState.hp <= 0) {
+        endFight(false);
+    } else {
+        updateCombatUI();
+    }
+}
+
+function endFight(isVictory) {
+    if (isVictory) {
+        logToCombat(`You have defeated the ${currentEnemy.name}!`);
+        const xpGained = currentEnemy.xp * (1 + getIntelligence() * 0.05);
+        logToCombat(`You gain ${formatNumber(xpGained)} XP.`);
+        gameState.xp += xpGained;
+        if (gameState.xp >= gameState.xpToNextLevel) levelUp();
+
+        if (Math.random() < currentEnemy.itemChance) {
+            generateItemDrop();
+        }
+    } else {
+        logToCombat(`You have been defeated...`);
+    }
+    currentEnemy = null;
+    setTimeout(() => {
+        allUIElements['adventure-hub'].classList.remove('hidden');
+        allUIElements['combat-zone'].classList.add('hidden');
+        updateUI();
+    }, 2000);
+}
+
+function generateItemDrop() {
+    const itemTypes = Object.keys(ITEMS);
+    const randomType = itemTypes[Math.floor(Math.random() * itemTypes.length)];
+    const randomItem = ITEMS[randomType][Math.floor(Math.random() * ITEMS[randomType].length)];
+    
+    const newItem = { ...randomItem, type: randomType, id: Date.now() + Math.random() };
+    gameState.inventory.push(newItem);
+    logToCombat(`The enemy dropped: ${newItem.name}!`);
+    updateInventoryUI();
+}
+
+function equipItem(itemId) {
+    const itemIndex = gameState.inventory.findIndex(i => i.id === itemId);
+    if (itemIndex === -1) return;
+    const itemToEquip = gameState.inventory[itemIndex];
+    if (gameState.equipment[itemToEquip.type]) {
+        gameState.inventory.push(gameState.equipment[itemToEquip.type]);
+    }
+    gameState.equipment[itemToEquip.type] = itemToEquip;
+    gameState.inventory.splice(itemIndex, 1);
+    
+    updateEquipmentUI();
+    updateInventoryUI();
+    updateUI();
+}
+
+// --- UI & EVENT HANDLING ---
+const allUIElements = {};
+
+function cacheDOMElements() {
+    const ids = ["level-display", "xp-display", "xp-progress-bar", "stat-points-display", "core-stats-container", "equipment-container", "talents-container", "vitality-display", "vps-display", "train-gains-display", "adventure-hub", "combat-zone", "player-hp-bar", "player-hp-display", "enemy-name", "enemy-hp-bar", "enemy-hp-display", "combat-log", "inventory-container", "inventory-placeholder", "essence-points-display", "essence-bonus-display", "rebirth-requirement-display", "essence-gain-display", "modal-essence-gain", "train-button", "find-fight-button", "attack-button", "rebirth-button", "save-button", "reset-button", "rebirth-modal", "confirm-rebirth-button", "cancel-rebirth-button"];
+    ids.forEach(id => allUIElements[id] = document.getElementById(id));
+}
+
+function logToCombat(message) {
+    const p = document.createElement('p');
+    p.textContent = message;
+    allUIElements['combat-log'].prepend(p);
+}
+
+function formatNumber(num) {
+    if (num < 1e3) return num.toFixed(0);
+    if (num < 1e6) return (num / 1e3).toFixed(2) + "K";
+    return num.toExponential(2);
+}
+
+function updateCombatUI() {
+    if (!currentEnemy) return;
+    allUIElements['enemy-name'].textContent = currentEnemy.name;
+    allUIElements['player-hp-bar'].style.width = `${(playerCombatState.hp / getMaxHP()) * 100}%`;
+    allUIElements['player-hp-display'].textContent = `${formatNumber(playerCombatState.hp)} / ${formatNumber(getMaxHP())}`;
+    allUIElements['enemy-hp-bar'].style.width = `${(currentEnemy.hp / MONSTERS[currentEnemy.name.toLowerCase()].hp) * 100}%`;
+    allUIElements['enemy-hp-display'].textContent = `${formatNumber(currentEnemy.hp)} / ${MONSTERS[currentEnemy.name.toLowerCase()].hp}`;
+}
+
+function updateEquipmentUI() {
+    allUIElements['equipment-container'].innerHTML = '';
+    for (const slot in gameState.equipment) {
+        const item = gameState.equipment[slot];
+        const el = document.createElement('div');
+        el.className = 'bg-gray-700 p-2 rounded-lg flex justify-between items-center';
+        let itemName = 'Empty', itemStats = '---';
+        if (item) {
+            itemName = item.name;
+            itemStats = Object.entries(item.stats).map(([k, v]) => `+${v} ${k.slice(0,3)}`).join(', ');
+        }
+        el.innerHTML = `<p class="font-semibold">${slot.charAt(0).toUpperCase() + slot.slice(1)}: <span class="text-yellow-400">${itemName}</span></p><p class="text-sm text-gray-400">${itemStats}</p>`;
+        allUIElements['equipment-container'].appendChild(el);
+    }
+}
+
+function updateInventoryUI() {
+    allUIElements['inventory-container'].innerHTML = gameState.inventory.length === 0 ? `<p id="inventory-placeholder" class="text-center text-gray-500">No items found.</p>` : '';
+    gameState.inventory.forEach(item => {
+        const el = document.createElement('div');
+        el.className = 'bg-gray-700 p-2 rounded-lg flex justify-between items-center';
+        const itemStats = Object.entries(item.stats).map(([k, v]) => `+${v} ${k.slice(0,3)}`).join(', ');
+        el.innerHTML = `<div><p class="font-semibold text-yellow-400">${item.name}</p><p class="text-sm text-gray-400">${itemStats}</p></div><button class="btn btn-secondary text-xs py-1 px-2 equip-item-btn" data-id="${item.id}">Equip</button>`;
+        allUIElements['inventory-container'].appendChild(el);
+    });
+}
+
+function updateUI() {
+    allUIElements['level-display'].textContent = gameState.level;
+    allUIElements['xp-display'].textContent = `${formatNumber(gameState.xp)} / ${formatNumber(gameState.xpToNextLevel)}`;
+    allUIElements['xp-progress-bar'].style.width = `${Math.min(100, (gameState.xp / gameState.xpToNextLevel) * 100)}%`;
+    allUIElements['stat-points-display'].textContent = gameState.statPoints;
+    for (const key in gameState.coreStats) {
+        const statEl = document.getElementById(`core-stat-${key}`);
+        if(statEl) {
+            statEl.querySelector('.core-stat-level').textContent = gameState.coreStats[key].level;
+            const spendBtn = statEl.querySelector('.spend-stat-btn');
+            spendBtn.disabled = gameState.statPoints === 0;
+            spendBtn.classList.toggle('btn-disabled', gameState.statPoints === 0);
+        }
+    }
+    allUIElements['vitality-display'].textContent = formatNumber(gameState.vitality);
+    allUIElements['vps-display'].textContent = formatNumber(getVitalityPerSecond());
+    allUIElements['train-gains-display'].textContent = `+${formatNumber(getVitalityPerTrain())} Vit, +${formatNumber(getXpPerTrain())} XP`;
+    gameState.talents.forEach(talent => {
+        const talentEl = document.getElementById(`talent-${talent.id}`);
+        if (talentEl) {
+            talentEl.querySelector('.talent-level').textContent = `Lvl ${talent.level}`;
+            const cost = getTalentCost(talent);
+            talentEl.querySelector('.talent-cost').textContent = `${formatNumber(cost)} Vit`;
+            const upgradeBtn = talentEl.querySelector('.upgrade-talent-btn');
+            const canAfford = gameState.vitality >= cost;
+            upgradeBtn.disabled = !canAfford;
+            upgradeBtn.classList.toggle('btn-disabled', !canAfford);
+            upgradeBtn.classList.toggle('btn-secondary', canAfford);
+        }
+    });
+    const essenceGain = getEssenceGain();
+    allUIElements['essence-points-display'].textContent = formatNumber(gameState.essence);
+    allUIElements['essence-bonus-display'].textContent = `+${((getEssenceBonus() - 1) * 100).toFixed(0)}%`;
+    allUIElements['essence-gain-display'].textContent = formatNumber(essenceGain);
+    const canRebirth = essenceGain > 0;
+    allUIElements['rebirth-requirement-display'].classList.toggle('hidden', canRebirth);
+    allUIElements['rebirth-button'].disabled = !canRebirth;
+    allUIElements['rebirth-button'].classList.toggle('btn-disabled', !canRebirth);
+    allUIElements['rebirth-button'].classList.toggle('btn-prestige', canRebirth);
+}
+
+function initializeUIs() {
+    allUIElements['core-stats-container'].innerHTML = '';
+    for (const key in gameState.coreStats) {
+        const stat = gameState.coreStats[key];
+        const statEl = document.createElement('div');
+        statEl.id = `core-stat-${key}`;
+        statEl.className = 'flex items-center justify-between bg-gray-700 p-3 rounded-lg';
+        statEl.innerHTML = `<div class="flex items-center space-x-4"><button class="btn btn-stat spend-stat-btn" data-stat="${key}">+</button><div><p class="font-semibold text-lg">${stat.name} (<span class="core-stat-level text-green-400">${stat.level}</span>)</p><p class="text-sm text-gray-400">${stat.description}</p></div></div>`;
+        allUIElements['core-stats-container'].appendChild(statEl);
+    }
+    allUIElements['talents-container'].innerHTML = '';
+    gameState.talents.forEach(talent => {
+        const talentEl = document.createElement('div');
+        talentEl.id = `talent-${talent.id}`;
+        talentEl.className = 'flex items-center justify-between bg-gray-700 p-3 rounded-lg';
+        talentEl.innerHTML = `<div><p class="font-semibold">${talent.name}</p><p class="text-sm text-gray-400">${talent.description}</p></div><div class="text-right"><p class="talent-level font-bold text-lg">Lvl ${talent.level}</p><p class="talent-cost text-sm text-red-300"></p></div><button class="btn upgrade-talent-btn" data-id="${talent.id}">Upgrade</button>`;
+        allUIElements['talents-container'].appendChild(talentEl);
+    });
+    updateEquipmentUI();
+    updateInventoryUI();
+}
+
+// --- EVENT LISTENERS ---
+function setupEventListeners() {
+    document.body.addEventListener('click', e => {
+        if (e.target.matches('.spend-stat-btn')) spendStatPoint(e.target.dataset.stat);
+        if (e.target.matches('.upgrade-talent-btn')) upgradeTalent(parseInt(e.target.dataset.id));
+        if (e.target.matches('.equip-item-btn')) equipItem(parseFloat(e.target.dataset.id));
+    });
+    allUIElements['train-button'].addEventListener('click', () => {
+        gameState.vitality += getVitalityPerTrain();
+        gameState.xp += getXpPerTrain();
+        if (gameState.xp >= gameState.xpToNextLevel) levelUp();
+        updateUI();
+    });
+    allUIElements['find-fight-button'].addEventListener('click', startFight);
+    allUIElements['attack-button'].addEventListener('click', playerAttack);
+    allUIElements['rebirth-button'].addEventListener('click', () => {
+        const gain = getEssenceGain();
+        if (gain > 0) {
+            allUIElements['modal-essence-gain'].textContent = formatNumber(gain);
+            allUIElements['rebirth-modal'].classList.remove('hidden');
+        }
+    });
+    allUIElements['cancel-rebirth-button'].addEventListener('click', () => allUIElements['rebirth-modal'].classList.add('hidden'));
+    allUIElements['confirm-rebirth-button'].addEventListener('click', () => {
+        rebirth();
+        allUIElements['rebirth-modal'].classList.add('hidden');
+    });
+    allUIElements['save-button'].addEventListener('click', () => {
+        saveGame();
+        allUIElements['save-button'].textContent = 'Saved!';
+        setTimeout(() => { allUIElements['save-button'].textContent = 'Save Game'; }, 1500);
+    });
+    allUIElements['reset-button'].addEventListener('click', () => {
+        if (confirm('Are you sure? This will completely erase all progress.')) hardReset();
+    });
+}
+
+// --- GAME INITIALIZATION & LOOP ---
+function saveGame() { localStorage.setItem('idleCombatGame', JSON.stringify(gameState)); }
+function loadGame() {
+    const savedGame = localStorage.getItem('idleCombatGame');
+    gameState = savedGame ? deepMerge(JSON.parse(JSON.stringify(initialGameState)), JSON.parse(savedGame)) : JSON.parse(JSON.stringify(initialGameState));
+}
+function deepMerge(target, source) {
+    const output = { ...target };
+    if (isObject(target) && isObject(source)) {
+        Object.keys(source).forEach(key => {
+            if (isObject(source[key])) {
+                if (!(key in target)) Object.assign(output, { [key]: source[key] });
+                else output[key] = deepMerge(target[key], source[key]);
+            } else { Object.assign(output, { [key]: source[key] }); }
+        });
+    }
+    return output;
+}
+function isObject(item) { return (item && typeof item === 'object' && !Array.isArray(item)); }
+function hardReset() {
+    localStorage.removeItem('idleCombatGame');
+    gameState = JSON.parse(JSON.stringify(initialGameState));
+    initializeUIs();
+    updateUI();
+}
+
+function gameLoop() {
+    gameState.vitality += getVitalityPerSecond() / 20;
+    updateUI();
+}
+
+window.onload = function() {
+    cacheDOMElements();
+    loadGame();
+    initializeUIs();
+    setupEventListeners();
+    allUIElements['rebirth-requirement-display'].textContent = 'Requirement: Level 5 for first Essence';
+    setInterval(gameLoop, 50);
+};
+
+</script>
+</body>
+</html>
